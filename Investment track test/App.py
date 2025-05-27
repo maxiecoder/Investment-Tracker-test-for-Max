@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 
 DATA_FILE = "investment_tracker.csv"
@@ -57,12 +57,16 @@ st.sidebar.markdown("### Filter Data")
 properties = df["Property"].unique().tolist()
 selected_props = st.sidebar.multiselect("Select Properties", properties, default=properties)
 
-if not df.empty:
+if not df.empty and df["Week Ending"].notna().any():
     min_date = df["Week Ending"].min().date()
     max_date = df["Week Ending"].max().date()
-    start_date, end_date = st.sidebar.date_input("Filter by Week Ending Date Range", [min_date, max_date])
 else:
-    start_date, end_date = datetime.today(), datetime.today()
+    min_date = max_date = datetime.today().date()
+
+start_date, end_date = st.sidebar.date_input(
+    "Filter by Week Ending Date Range",
+    value=[min_date, max_date]
+)
 
 filtered = df[
     (df["Property"].isin(selected_props)) &
