@@ -11,12 +11,11 @@ st.title("🏠 Weekly Investment Tracker")
 # Load existing data
 if os.path.exists(DATA_FILE):
     df = pd.read_csv(DATA_FILE)
-    # Convert columns to datetime, coercing errors to NaT
-    df["Week Ending"] = pd.to_datetime(df["Week Ending"], errors="coerce")
+    # Convert Lease Start Date to datetime
     df["Lease Start Date"] = pd.to_datetime(df["Lease Start Date"], errors="coerce")
 else:
     df = pd.DataFrame(columns=[
-        "Week Ending", "Property", "Lease Start Date", "Lease Period (months)",
+        "Property", "Lease Start Date", "Lease Period (months)",
         "Weekly Rent", "Agent Fee (%)", "Agent Fee Amount", "Mortgage Cost",
         "Net Cash Flow", "Notes"
     ])
@@ -27,7 +26,6 @@ with st.sidebar.form("weekly_form"):
     property_name = st.text_input("Property Name")
     lease_start = st.date_input("Lease Start Date", datetime.today())
     lease_period = st.number_input("Lease Period (months)", min_value=1, step=1)
-    week_ending = st.date_input("Week Ending", datetime.today())
     weekly_rent = st.number_input("Weekly Rent", min_value=0.0, step=0.01)
     agent_fee_pct = st.number_input("Agent Fee (%)", min_value=0.0, max_value=100.0, step=0.1)
     mortgage_cost = st.number_input("Weekly Mortgage Cost", min_value=0.0, step=0.01)
@@ -39,7 +37,6 @@ with st.sidebar.form("weekly_form"):
         net_cash_flow = weekly_rent - agent_fee_amount - mortgage_cost
 
         new_row = pd.DataFrame([{
-            "Week Ending": week_ending,
             "Property": property_name,
             "Lease Start Date": lease_start,
             "Lease Period (months)": lease_period,
@@ -55,14 +52,12 @@ with st.sidebar.form("weekly_form"):
         df.to_csv(DATA_FILE, index=False)
         st.success("Entry added!")
 
-# Filter data
+# Filter data by Lease Start Date
 st.sidebar.markdown("### Filter Data")
 properties = df["Property"].dropna().unique().tolist()
 selected_props = st.sidebar.multiselect("Select Properties", properties, default=properties)
 
-# Safely get min/max dates
-valid_dates = df["Week Ending"].dropna()
-
+valid_dates = df["Lease Start Date"].dropna()
 if not valid_dates.empty:
     min_date = valid_dates.min().date()
     max_date = valid_dates.max().date()
@@ -70,27 +65,23 @@ else:
     min_date = max_date = datetime.today().date()
 
 start_date, end_date = st.sidebar.date_input(
-    "Filter by Week Ending Date Range",
+    "Filter by Lease Start Date Range",
     value=[min_date, max_date]
 )
 
 filtered = df[
     (df["Property"].isin(selected_props)) &
-    (df["Week Ending"].notna()) &
-    (df["Week Ending"].dt.date >= start_date) &
-    (df["Week Ending"].dt.date <= end_date)
+    (df["Lease Start Date"].notna()) &
+    (df["Lease Start Date"].dt.date >= start_date) &
+    (df["Lease Start Date"].dt.date <= end_date)
 ]
 
 # Show filtered data
 if not filtered.empty:
-    st.subheader("Weekly Investment Logs")
-    st.dataframe(filtered.sort_values("Week Ending", ascending=False))
+    st.subheader("Investment Logs")
+    st.dataframe(filtered.sort_values("Lease Start Date", ascending=False))
 
-    st.subheader("Net Cash Flow Over Time")
-    cashflow = filtered.groupby("Week Ending")["Net Cash Flow"].sum().reset_index()
-    st.line_chart(cashflow.set_index("Week Ending"))
-
-    st.subheader("Summary by Property")
+    st.subheader("Net Cash Flow by Property")
     summary = filtered.groupby("Property").agg({
         "Weekly Rent": "mean",
         "Agent Fee (%)": "mean",
