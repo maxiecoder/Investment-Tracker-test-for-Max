@@ -18,16 +18,19 @@ page = st.sidebar.radio("📂 Select Page", ["🏘️ Weekly Tracker", "📉 Amo
 if page == "🏘️ Weekly Tracker":
     st.title("📅 Weekly Property Investment Tracker")
 
-    # Load existing data
+    # Load existing data with fallback rename for week column
     if os.path.exists(DATA_FILE):
-        df_all = pd.read_csv(DATA_FILE, parse_dates=["Week Start"])
+        df_all = pd.read_csv(DATA_FILE)
+        if "Week Start" not in df_all.columns and "Week Ending" in df_all.columns:
+            df_all = df_all.rename(columns={"Week Ending": "Week Start"})
+        df_all["Week Start"] = pd.to_datetime(df_all["Week Start"])
     else:
         df_all = pd.DataFrame(columns=["Week Start", "Property", "Rent", "Expenses", "Interest", "Net Cash Flow", "Notes"])
 
     # Input form in sidebar
     st.sidebar.header("Log Weekly Data")
     with st.sidebar.form("weekly_form"):
-        week_start = st.date_input("Week Start", datetime.today())
+        date = st.date_input("Week Start", datetime.today())
         property_name = st.text_input("Property Name")
         rent = st.number_input("Weekly Rent Income", min_value=0.0)
         expenses = st.number_input("Other Weekly Expenses", min_value=0.0)
@@ -41,7 +44,7 @@ if page == "🏘️ Weekly Tracker":
             else:
                 net = rent - expenses - interest
                 new_entry = pd.DataFrame([{
-                    "Week Start": pd.to_datetime(week_start),
+                    "Week Start": pd.to_datetime(date),
                     "Property": property_name,
                     "Rent": rent,
                     "Expenses": expenses,
@@ -65,9 +68,9 @@ if page == "🏘️ Weekly Tracker":
             max_date = valid_dates.max().date()
             start_date, end_date = st.sidebar.date_input("Filter by Date Range", [min_date, max_date])
         else:
-            start_date, end_date = datetime.today().date(), datetime.today().date()
+            start_date, end_date = datetime.today(), datetime.today()
     else:
-        start_date, end_date = datetime.today().date(), datetime.today().date()
+        start_date, end_date = datetime.today(), datetime.today()
 
     # Apply filters
     if not df_all.empty:
@@ -94,17 +97,19 @@ if page == "🏘️ Weekly Tracker":
 
         summary_df = filtered_df.groupby("Property")[["Rent", "Expenses", "Interest"]].sum().reset_index()
 
+        # Total rent already summed for period (weekly sums)
         summary_df["Total Rent"] = summary_df["Rent"]
-
-        summary_df["Agent Cost (5%)"] = summary_df["Total Rent"] * 0.05
+        summary_df["Agent Cost (5%)"] = summary_df["Total Rent"] * 0.05  # example 5% agent fee
 
         summary_df["Other Costs"] = summary_df["Expenses"]
 
+        # Estimate principal from net cash flow + interest
         filtered_df["Principal"] = filtered_df["Rent"] - filtered_df["Expenses"] - filtered_df["Interest"] - filtered_df["Net Cash Flow"]
         principal_sum = filtered_df.groupby("Property")["Principal"].sum().reset_index()
         summary_df = summary_df.merge(principal_sum, on="Property", how="left")
         summary_df = summary_df.rename(columns={"Principal": "Estimated Principal"})
 
+        # Net rental income = total rent - agent cost - other costs - interest - principal
         summary_df["Net Rental Income"] = summary_df["Total Rent"] - summary_df["Agent Cost (5%)"] - summary_df["Other Costs"] - summary_df["Interest"] - summary_df["Estimated Principal"].fillna(0)
 
         st.dataframe(summary_df.style.format({
@@ -115,6 +120,7 @@ if page == "🏘️ Weekly Tracker":
             "Estimated Principal": "${:,.2f}",
             "Net Rental Income": "${:,.2f}",
         }))
+
     else:
         st.warning("No data matches your filters. Try adjusting the date range or property selection.")
 
@@ -124,9 +130,12 @@ if page == "🏘️ Weekly Tracker":
 if page == "📉 Amortization Calculator":
     st.title("📉 Mortgage Amortization Calculator")
 
-    # Load weekly data
+    # Load weekly data with fallback rename
     if os.path.exists(DATA_FILE):
-        df_all = pd.read_csv(DATA_FILE, parse_dates=["Week Start"])
+        df_all = pd.read_csv(DATA_FILE)
+        if "Week Start" not in df_all.columns and "Week Ending" in df_all.columns:
+            df_all = df_all.rename(columns={"Week Ending": "Week Start"})
+        df_all["Week Start"] = pd.to_datetime(df_all["Week Start"])
     else:
         st.warning("No data file found. Please enter weekly logs first in the Tracker.")
         st.stop()
@@ -154,7 +163,12 @@ if page == "📉 Amortization Calculator":
             st.warning("No weekly data for this property.")
             st.stop()
 
-        # Filter logs for the amortization period
+        schedule = []
+        balance = loan_amount
+        total_interest = 0.0
+        total_principal = 0.0
+
+        # Filter logs to amort_start_date and next amort_period_weeks
         property_df = property_df[property_df["Week Start"].dt.date >= amort_start_date]
         property_df = property_df.head(amort_period_weeks)
 
@@ -162,23 +176,19 @@ if page == "📉 Amortization Calculator":
             st.warning("No weekly data for the amortization period selected.")
             st.stop()
 
-        schedule = []
-        balance = loan_amount
-        total_interest = 0.0
-        total_principal = 0.0
-
         for _, row in property_df.iterrows():
             interest = row.get("Interest", 0)
+            # Calculate principal from net cash flow and interest + extra repayment
             principal = row.get("Rent", 0) - row.get("Expenses", 0) + extra_repayment
             principal = max(principal, 0)
-            principal = min(principal, balance)  # Cannot pay more than remaining balance
+            principal = min(principal, balance)  # Can't pay more than balance
 
             balance -= principal
             total_interest += interest
             total_principal += principal
 
             schedule.append({
-                "Week Start": row["Week Start"].date(),
+                "Week": row["Week Start"].date(),
                 "Interest Paid": interest,
                 "Principal Paid": principal,
                 "Total Payment": interest + principal,
@@ -194,7 +204,7 @@ if page == "📉 Amortization Calculator":
         st.dataframe(schedule_df)
 
         st.subheader("📊 Remaining Loan Balance Over Time")
-        st.line_chart(schedule_df.set_index("Week Start")["Remaining Balance"])
+        st.line_chart(schedule_df.set_index("Week")["Remaining Balance"])
 
         st.success(f"Total Interest Paid: ${total_interest:,.2f}")
         st.success(f"Total Principal Paid: ${total_principal:,.2f}")
