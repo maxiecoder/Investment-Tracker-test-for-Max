@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-import numpy as np
 
 st.set_page_config(page_title="Investment & Amortization Tracker", layout="wide")
 
@@ -40,7 +39,7 @@ if page == "🏠 Investment Tracker":
     if weekly_rent > 0 and lease_period_months > 0:
         total_rent = weekly_rent * (52 / 12) * lease_period_months
         total_agent_fee = (agent_fee_percent / 100) * total_rent
-        lease_weeks = int((52 / 12) * lease_period_months)
+        lease_weeks = (52 / 12) * lease_period_months
         total_interest = weekly_interest * lease_weeks
         total_principal = weekly_principal * lease_weeks
         total_other_costs = sum(other_costs)
@@ -48,25 +47,6 @@ if page == "🏠 Investment Tracker":
 
         total_costs = total_agent_fee + total_other_costs + total_mortgage
         net_rental_income = total_rent - total_costs
-
-        # Calculate weekly net rental income
-        weekly_agent_fee = total_agent_fee / lease_weeks if lease_weeks else 0
-        weekly_other_costs = total_other_costs / lease_weeks if lease_weeks else 0
-        weekly_mortgage = total_mortgage / lease_weeks if lease_weeks else 0
-
-        weekly_net_income = weekly_rent - (weekly_agent_fee + weekly_other_costs + weekly_mortgage)
-
-        # Calculate cumulative net income over weeks
-        cumulative_net_income = np.cumsum([weekly_net_income] * lease_weeks)
-
-        # Find week when cumulative net income turns positive
-        positive_weeks = np.where(cumulative_net_income > 0)[0]
-        if len(positive_weeks) > 0:
-            weeks_to_positive = positive_weeks[0] + 1  # zero-based index + 1
-            positive_date = lease_start + timedelta(weeks=weeks_to_positive)
-            st.success(f"✅ Positive gearing reached after **{weeks_to_positive} week(s)**, around **{positive_date.strftime('%Y-%m-%d')}**.")
-        else:
-            st.info("⚠️ Positive gearing not reached within the lease period.")
 
         st.header("📊 Results Summary")
         st.metric("Total Rent", f"${total_rent:,.2f}")
@@ -82,6 +62,17 @@ if page == "🏠 Investment Tracker":
             st.write("Additional Costs:")
             for label, value in zip(cost_labels, other_costs):
                 st.write(f"- {label}: ${value:,.2f}")
+
+        # Calculate weeks to positive gearing and date
+        if total_costs > 0 and net_rental_income < 0:
+            weeks_to_positive = -net_rental_income / (total_rent / lease_weeks)  # Approximate
+            # Convert lease_start (date) to datetime before adding timedelta
+            positive_date = datetime.combine(lease_start, datetime.min.time()) + timedelta(weeks=weeks_to_positive)
+            st.info(f"Estimated weeks until positive gearing: {weeks_to_positive:.1f} weeks")
+            st.info(f"Estimated date when property becomes positively geared: {positive_date.date()}")
+        elif net_rental_income >= 0:
+            st.success("Your property is currently positively geared!")
+
     else:
         st.warning("Please enter values for rent and lease period to calculate.")
 
@@ -119,16 +110,12 @@ elif page == "📉 Amortization Calculator":
 
             for week in range(1, amort_period_weeks + 1):
                 interest_payment = balance * weekly_interest_rate
-                # Assume a fixed weekly payment for simplicity:
-                # Payment enough to amortize loan in loan_term_years * 52 weeks without extra repayment
                 total_weeks = loan_term_years * 52
                 if weekly_interest_rate > 0:
-                    # Calculate fixed weekly payment using annuity formula
                     weekly_payment = loan_amount * (weekly_interest_rate * (1 + weekly_interest_rate) ** total_weeks) / ((1 + weekly_interest_rate) ** total_weeks - 1)
                 else:
                     weekly_payment = loan_amount / total_weeks
 
-                # Add extra repayment
                 payment = weekly_payment + extra_repayment
 
                 principal_payment = payment - interest_payment
