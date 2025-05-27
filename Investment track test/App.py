@@ -1,181 +1,97 @@
 import streamlit as st
-
 import pandas as pd
-
-from datetime import datetime
-
+from datetime import datetime, timedelta
 import os
 
- 
+DATA_FILE = "investment_tracker.csv"
 
-DATA_FILE = "tracker_data.csv"
+st.set_page_config(page_title="Investment Tracker", layout="wide")
+st.title("🏠 Weekly Investment Tracker")
 
- 
-
-st.set_page_config(page_title="Weekly Property Tracker", layout="wide")
-
-st.title("📅 Weekly Property Investment Tracker")
-
- 
-
-# ---------------------------
-
-# 🔁 Load existing data from CSV
-
-# ---------------------------
-
+# Load existing data
 if os.path.exists(DATA_FILE):
-
-    df_all = pd.read_csv(DATA_FILE, parse_dates=["Week Ending"])
-
+    df = pd.read_csv(DATA_FILE, parse_dates=["Week Ending", "Lease Start Date"])
 else:
+    df = pd.DataFrame(columns=[
+        "Week Ending", "Property", "Lease Start Date", "Lease Period (months)",
+        "Weekly Rent", "Agent Fee (%)", "Agent Fee Amount", "Mortgage Cost",
+        "Net Cash Flow", "Notes"
+    ])
 
-    df_all = pd.DataFrame(columns=["Week Ending", "Property", "Rent", "Expenses", "Interest", "Net Cash Flow", "Notes"])
-
- 
-
-# ---------------------------
-
-# 📝 Input Form (Sidebar)
-
-# ---------------------------
-
-st.sidebar.header("Log Weekly Data")
-
+# Sidebar input form
+st.sidebar.header("Add Weekly Data")
 with st.sidebar.form("weekly_form"):
-
-    date = st.date_input("Week Ending", datetime.today())
-
     property_name = st.text_input("Property Name")
-
-    rent = st.number_input("Weekly Rent Income", min_value=0.0)
-
-    expenses = st.number_input("Other Weekly Expenses", min_value=0.0)
-
-    interest = st.number_input("Weekly Mortgage Interest", min_value=0.0)
-
+    lease_start = st.date_input("Lease Start Date", datetime.today())
+    lease_period = st.number_input("Lease Period (months)", min_value=1, step=1)
+    week_ending = st.date_input("Week Ending", datetime.today())
+    weekly_rent = st.number_input("Weekly Rent", min_value=0.0, step=0.01)
+    agent_fee_pct = st.number_input("Agent Fee (%)", min_value=0.0, max_value=100.0, step=0.1)
+    mortgage_cost = st.number_input("Weekly Mortgage Cost", min_value=0.0, step=0.01)
     notes = st.text_area("Notes (optional)", "")
-
-    submitted = st.form_submit_button("Add Weekly Log")
-
- 
+    submitted = st.form_submit_button("Add Entry")
 
     if submitted and property_name:
+        agent_fee_amount = weekly_rent * (agent_fee_pct / 100)
+        net_cash_flow = weekly_rent - agent_fee_amount - mortgage_cost
 
-        net = rent - expenses - interest
-
-        new_entry = pd.DataFrame([{
-
-            "Week Ending": pd.to_datetime(date),
-
+        new_row = pd.DataFrame([{
+            "Week Ending": week_ending,
             "Property": property_name,
-
-            "Rent": rent,
-
-            "Expenses": expenses,
-
-            "Interest": interest,
-
-            "Net Cash Flow": net,
-
+            "Lease Start Date": lease_start,
+            "Lease Period (months)": lease_period,
+            "Weekly Rent": weekly_rent,
+            "Agent Fee (%)": agent_fee_pct,
+            "Agent Fee Amount": agent_fee_amount,
+            "Mortgage Cost": mortgage_cost,
+            "Net Cash Flow": net_cash_flow,
             "Notes": notes
-
         }])
 
-        df_all = pd.concat([df_all, new_entry], ignore_index=True)
+        df = pd.concat([df, new_row], ignore_index=True)
+        df.to_csv(DATA_FILE, index=False)
+        st.success("Entry added!")
 
-        df_all.to_csv(DATA_FILE, index=False)
+# Filter data
+st.sidebar.markdown("### Filter Data")
+properties = df["Property"].unique().tolist()
+selected_props = st.sidebar.multiselect("Select Properties", properties, default=properties)
 
-        st.success("Weekly log added and saved!")
-
- 
-
-# ---------------------------
-
-# 🔍 Filters (Property + Date)
-
-# ---------------------------
-
-st.sidebar.markdown("### 🔎 Filter Data")
-
- 
-
-# Property filter
-
-properties = df_all["Property"].unique().tolist()
-
-selected_properties = st.sidebar.multiselect("Filter by Property", properties, default=properties)
-
- 
-
-# Date range filter
-
-if not df_all.empty:
-
-    min_date = df_all["Week Ending"].min().date()
-
-    max_date = df_all["Week Ending"].max().date()
-
-    start_date, end_date = st.sidebar.date_input("Filter by Date Range", [min_date, max_date])
-
+if not df.empty:
+    min_date = df["Week Ending"].min().date()
+    max_date = df["Week Ending"].max().date()
+    start_date, end_date = st.sidebar.date_input("Filter by Week Ending Date Range", [min_date, max_date])
 else:
-
     start_date, end_date = datetime.today(), datetime.today()
 
- 
-
-# Apply filters
-
-filtered_df = df_all[
-
-    (df_all["Property"].isin(selected_properties)) &
-
-    (df_all["Week Ending"].dt.date >= start_date) &
-
-    (df_all["Week Ending"].dt.date <= end_date)
-
+filtered = df[
+    (df["Property"].isin(selected_props)) &
+    (df["Week Ending"].dt.date >= start_date) &
+    (df["Week Ending"].dt.date <= end_date)
 ]
 
- 
+# Show filtered data
+if not filtered.empty:
+    st.subheader("Weekly Investment Logs")
+    st.dataframe(filtered.sort_values("Week Ending", ascending=False))
 
-# ---------------------------
+    st.subheader("Net Cash Flow Over Time")
+    cashflow = filtered.groupby("Week Ending")["Net Cash Flow"].sum().reset_index()
+    st.line_chart(cashflow.set_index("Week Ending"))
 
-# 📊 Weekly Log Table
+    st.subheader("Summary by Property")
+    summary = filtered.groupby("Property").agg({
+        "Weekly Rent": "mean",
+        "Agent Fee (%)": "mean",
+        "Mortgage Cost": "mean",
+        "Net Cash Flow": "sum"
+    }).reset_index()
 
-# ---------------------------
-
-if not filtered_df.empty:
-
-    filtered_df = filtered_df.sort_values("Week Ending", ascending=False)
-
-    st.subheader("📋 Weekly Property Log")
-
-    st.dataframe(filtered_df)
-
- 
-
-    # Net cash flow over time
-
-    st.subheader("📈 Total Net Cash Flow Over Time")
-
-    cashflow_chart = filtered_df.groupby("Week Ending")["Net Cash Flow"].sum().reset_index()
-
-    st.line_chart(cashflow_chart.set_index("Week Ending"))
-
- 
-
-    # Compare properties side-by-side
-
-    st.subheader("🏘️ Compare Properties Side-by-Side")
-
-    summary_df = filtered_df.groupby("Property")[["Rent", "Expenses", "Interest", "Net Cash Flow"]].sum().reset_index()
-
-    summary_df["ROI (%)"] = ((summary_df["Net Cash Flow"] * 52) / (summary_df["Rent"] * 52 + summary_df["Expenses"] + summary_df["Interest"])) * 100
-
-    summary_df = summary_df.sort_values("Net Cash Flow", ascending=False)
-
-    st.dataframe(summary_df.style.format({"ROI (%)": "{:.2f}"}))
-
+    st.dataframe(summary.style.format({
+        "Weekly Rent": "${:,.2f}",
+        "Agent Fee (%)": "{:.2f}%",
+        "Mortgage Cost": "${:,.2f}",
+        "Net Cash Flow": "${:,.2f}"
+    }))
 else:
-
-    st.warning("No data matches your filters. Try adjusting the date range or property selection.")
+    st.warning("No data to display with current filters.")
