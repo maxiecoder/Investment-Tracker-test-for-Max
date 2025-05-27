@@ -10,7 +10,10 @@ st.title("🏠 Weekly Investment Tracker")
 
 # Load existing data
 if os.path.exists(DATA_FILE):
-    df = pd.read_csv(DATA_FILE, parse_dates=["Week Ending", "Lease Start Date"])
+    df = pd.read_csv(DATA_FILE)
+    # Convert columns to datetime, coercing errors to NaT
+    df["Week Ending"] = pd.to_datetime(df["Week Ending"], errors="coerce")
+    df["Lease Start Date"] = pd.to_datetime(df["Lease Start Date"], errors="coerce")
 else:
     df = pd.DataFrame(columns=[
         "Week Ending", "Property", "Lease Start Date", "Lease Period (months)",
@@ -54,12 +57,15 @@ with st.sidebar.form("weekly_form"):
 
 # Filter data
 st.sidebar.markdown("### Filter Data")
-properties = df["Property"].unique().tolist()
+properties = df["Property"].dropna().unique().tolist()
 selected_props = st.sidebar.multiselect("Select Properties", properties, default=properties)
 
-if not df.empty and df["Week Ending"].notna().any():
-    min_date = df["Week Ending"].min().date()
-    max_date = df["Week Ending"].max().date()
+# Safely get min/max dates
+valid_dates = df["Week Ending"].dropna()
+
+if not valid_dates.empty:
+    min_date = valid_dates.min().date()
+    max_date = valid_dates.max().date()
 else:
     min_date = max_date = datetime.today().date()
 
@@ -70,6 +76,7 @@ start_date, end_date = st.sidebar.date_input(
 
 filtered = df[
     (df["Property"].isin(selected_props)) &
+    (df["Week Ending"].notna()) &
     (df["Week Ending"].dt.date >= start_date) &
     (df["Week Ending"].dt.date <= end_date)
 ]
