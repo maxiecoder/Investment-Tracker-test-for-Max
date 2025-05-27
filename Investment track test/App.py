@@ -12,7 +12,6 @@ st.header("🔢 Input Property Details")
 weekly_rent = st.number_input("Weekly Rent ($)", min_value=0.0, step=10.0)
 lease_start = st.date_input("Lease Start Date")
 lease_period_months = st.number_input("Lease Period (months)", min_value=1, step=1)
-lease_weeks = lease_period_months * 4  # Approximate weeks
 
 agent_fee_percent = st.number_input("Agent Fee (% of total rent)", min_value=0.0, step=0.1)
 
@@ -33,9 +32,11 @@ for i in range(n_costs):
 # ------------------------------
 # Calculations
 # ------------------------------
-if weekly_rent > 0 and lease_weeks > 0:
-    total_rent = weekly_rent * lease_weeks
+if weekly_rent > 0 and lease_period_months > 0:
+    # Accurate weekly-to-monthly conversion
+    total_rent = weekly_rent * (52 / 12) * lease_period_months
     total_agent_fee = (agent_fee_percent / 100) * total_rent
+    lease_weeks = (52 / 12) * lease_period_months
     total_interest = weekly_interest * lease_weeks
     total_principal = weekly_principal * lease_weeks
     total_other_costs = sum(other_costs)
@@ -57,8 +58,9 @@ if weekly_rent > 0 and lease_weeks > 0:
     st.metric("Net Rental Income", f"${net_rental_income:,.2f}")
 
     st.subheader("🧾 Cost Breakdown")
-    st.write("Additional Costs:")
-    for label, value in zip(cost_labels, other_costs):
-        st.write(f"- {label}: ${value:,.2f}")
+    if other_costs:
+        st.write("Additional Costs:")
+        for label, value in zip(cost_labels, other_costs):
+            st.write(f"- {label}: ${value:,.2f}")
 else:
     st.warning("Please enter values for rent and lease period to calculate.")
