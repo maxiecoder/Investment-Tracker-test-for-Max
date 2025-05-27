@@ -11,7 +11,7 @@ st.title("🏠 Weekly Investment Tracker")
 # Load existing data
 if os.path.exists(DATA_FILE):
     df = pd.read_csv(DATA_FILE)
-    # Convert Lease Start Date to datetime
+    # Convert Lease Start Date to datetime safely
     df["Lease Start Date"] = pd.to_datetime(df["Lease Start Date"], errors="coerce")
 else:
     df = pd.DataFrame(columns=[
@@ -58,11 +58,16 @@ properties = df["Property"].dropna().unique().tolist()
 selected_props = st.sidebar.multiselect("Select Properties", properties, default=properties)
 
 valid_dates = df["Lease Start Date"].dropna()
-if not valid_dates.empty:
+
+if not valid_dates.empty and pd.notnull(valid_dates.min()):
     min_date = valid_dates.min().date()
+else:
+    min_date = datetime.today().date()
+
+if not valid_dates.empty and pd.notnull(valid_dates.max()):
     max_date = valid_dates.max().date()
 else:
-    min_date = max_date = datetime.today().date()
+    max_date = datetime.today().date()
 
 start_date, end_date = st.sidebar.date_input(
     "Filter by Lease Start Date Range",
