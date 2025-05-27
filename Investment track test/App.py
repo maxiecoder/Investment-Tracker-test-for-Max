@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -13,7 +14,6 @@ page = st.sidebar.radio("Select Page", ["🏠 Investment Tracker", "📉 Amortiz
 if page == "🏠 Investment Tracker":
     st.title("🏠 Property Investment Calculator")
     st.info("Use the Amortization Calculator page for detailed loan analysis and positive gearing date.")
-    # Add your investment tracker logic here.
 
 # ------------------------------
 # Amortization Calculator Page
@@ -22,23 +22,19 @@ elif page == "📉 Amortization Calculator":
     st.title("📉 Mortgage Amortization & Positive Gearing Calculator")
 
     st.subheader("Enter Loan Details")
-
     loan_amount = st.number_input("Loan Amount ($)", min_value=0.0, format="%.2f")
     loan_term_years = st.number_input("Loan Term (Years)", min_value=1, step=1, value=30)
     annual_interest_rate = st.number_input("Annual Interest Rate (%)", min_value=0.0, format="%.4f")
     extra_repayment = st.number_input("Weekly Extra Repayment ($)", min_value=0.0, format="%.2f")
-
     amort_start_date = st.date_input("Amortization Start Date", value=datetime.today())
-    amort_period_weeks = st.number_input("Amortization Period (Weeks)", min_value=1, max_value=loan_term_years * 52, value=520)
+    amort_period_weeks = st.number_input("Amortization Period (Weeks)", min_value=1, max_value=loan_term_years * 52, value=52)
 
     st.subheader("Enter Rental & Cost Details for Positive Gearing Calculation")
-
     weekly_rent = st.number_input("Weekly Rent ($)", min_value=0.0, step=10.0)
     agent_fee_percent = st.number_input("Agent Fee (% of total rent)", min_value=0.0, step=0.1)
 
     st.markdown("**Additional Weekly Costs** (e.g., maintenance, insurance)")
     n_costs = st.number_input("Number of Additional Weekly Costs", min_value=0, step=1, key="cost_count")
-
     other_weekly_costs = []
     cost_labels = []
     for i in range(n_costs):
@@ -60,19 +56,19 @@ elif page == "📉 Amortization Calculator":
             total_principal_paid = 0.0
 
             current_date = amort_start_date
+            total_weeks = loan_term_years * 52
 
-            # ✅ Compute fixed weekly payment to fully repay loan in amort_period_weeks
             if weekly_interest_rate > 0:
-                fixed_weekly_payment = loan_amount * (weekly_interest_rate * (1 + weekly_interest_rate) ** amort_period_weeks) / ((1 + weekly_interest_rate) ** amort_period_weeks - 1)
+                fixed_weekly_payment = loan_amount * (weekly_interest_rate * (1 + weekly_interest_rate) ** total_weeks) / ((1 + weekly_interest_rate) ** total_weeks - 1)
             else:
-                fixed_weekly_payment = loan_amount / amort_period_weeks
+                fixed_weekly_payment = loan_amount / total_weeks
 
-            # Calculate weekly agent fee and other costs
             weekly_agent_fee = (agent_fee_percent / 100) * weekly_rent
             total_other_costs = sum(other_weekly_costs)
 
             positive_gear_week = None
             positive_gear_date = None
+            payoff_week = None
 
             for week in range(1, amort_period_weeks + 1):
                 interest_payment = balance * weekly_interest_rate
@@ -94,3 +90,39 @@ elif page == "📉 Amortization Calculator":
                     "Week": current_date,
                     "Payment": payment,
                     "Interest Paid": interest_payment,
+                    "Principal Paid": principal_payment,
+                    "Remaining Balance": max(balance, 0),
+                    "Net Cash Flow": net_cash_flow
+                })
+
+                if positive_gear_week is None and net_cash_flow >= 0:
+                    positive_gear_week = week
+                    positive_gear_date = current_date
+
+                if balance <= 0:
+                    payoff_week = week
+                    break
+
+                current_date += timedelta(days=7)
+
+            schedule_df = pd.DataFrame(schedule)
+            st.subheader("Amortization Schedule")
+            st.dataframe(schedule_df.style.format({
+                "Payment": "${:,.2f}",
+                "Interest Paid": "${:,.2f}",
+                "Principal Paid": "${:,.2f}",
+                "Remaining Balance": "${:,.2f}",
+                "Net Cash Flow": "${:,.2f}"
+            }))
+
+            st.subheader("Summary")
+            st.write(f"Total Interest Paid: ${total_interest_paid:,.2f}")
+            st.write(f"Total Principal Paid: ${total_principal_paid:,.2f}")
+
+            if payoff_week:
+                st.success(f"The loan will be fully paid off after {payoff_week} weeks.")
+
+            if positive_gear_week:
+                st.success(f"Your property becomes positively geared after {positive_gear_week} weeks, on {positive_gear_date.date()}.")
+            else:
+                st.warning("The property does not become positively geared within the amortization period provided.")
