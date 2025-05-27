@@ -1,140 +1,64 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-import os
-
-DATA_FILE = "investment_data.csv"
 
 st.set_page_config(page_title="Investment Tracker", layout="wide")
-st.title("🏠 Investment Property Tracker")
+st.title("🏠 Property Investment Calculator")
 
-# Load existing data
-if os.path.exists(DATA_FILE):
-    df = pd.read_csv(DATA_FILE)
+# ------------------------------
+# Input Section
+# ------------------------------
+st.header("🔢 Input Property Details")
+
+weekly_rent = st.number_input("Weekly Rent ($)", min_value=0.0, step=10.0)
+lease_start = st.date_input("Lease Start Date")
+lease_period_months = st.number_input("Lease Period (months)", min_value=1, step=1)
+lease_weeks = lease_period_months * 4  # Approximate weeks
+
+agent_fee_percent = st.number_input("Agent Fee (% of total rent)", min_value=0.0, step=0.1)
+
+weekly_interest = st.number_input("Weekly Mortgage Interest ($)", min_value=0.0, step=10.0)
+weekly_principal = st.number_input("Weekly Mortgage Principal ($)", min_value=0.0, step=10.0)
+
+st.subheader("➕ Other Costs")
+other_costs = []
+cost_labels = []
+n_costs = st.number_input("How many additional costs do you want to add?", min_value=0, step=1)
+
+for i in range(n_costs):
+    label = st.text_input(f"Cost {i+1} label", key=f"label_{i}")
+    value = st.number_input(f"{label} ($)", min_value=0.0, step=10.0, key=f"value_{i}")
+    other_costs.append(value)
+    cost_labels.append(label)
+
+# ------------------------------
+# Calculations
+# ------------------------------
+if weekly_rent > 0 and lease_weeks > 0:
+    total_rent = weekly_rent * lease_weeks
+    total_agent_fee = (agent_fee_percent / 100) * total_rent
+    total_interest = weekly_interest * lease_weeks
+    total_principal = weekly_principal * lease_weeks
+    total_other_costs = sum(other_costs)
+    total_mortgage = total_interest + total_principal
+
+    total_costs = total_agent_fee + total_other_costs + total_mortgage
+    net_rental_income = total_rent - total_costs
+
+    # ------------------------------
+    # Output Section
+    # ------------------------------
+    st.header("📊 Results Summary")
+    st.metric("Total Rent", f"${total_rent:,.2f}")
+    st.metric("Agent Fee", f"${total_agent_fee:,.2f}")
+    st.metric("Total Interest", f"${total_interest:,.2f}")
+    st.metric("Total Principal", f"${total_principal:,.2f}")
+    st.metric("Total Other Costs", f"${total_other_costs:,.2f}")
+    st.metric("Total Mortgage Payment", f"${total_mortgage:,.2f}")
+    st.metric("Net Rental Income", f"${net_rental_income:,.2f}")
+
+    st.subheader("🧾 Cost Breakdown")
+    st.write("Additional Costs:")
+    for label, value in zip(cost_labels, other_costs):
+        st.write(f"- {label}: ${value:,.2f}")
 else:
-    df = pd.DataFrame(columns=[
-        "Property",
-        "Weekly Rent",
-        "Lease Start Date",
-        "Lease Period (Months)",
-        "Agent Fee (%)",
-        "Other Costs (comma-separated)",
-        "Weekly Mortgage Interest",
-        "Weekly Mortgage Principal",
-        "Residual Loan Balance",
-        "Notes"
-    ])
-
-# Convert Lease Start Date to datetime, handle errors safely
-df["Lease Start Date"] = pd.to_datetime(df["Lease Start Date"], errors="coerce")
-valid_dates = df["Lease Start Date"].dropna()
-if not valid_dates.empty:
-    min_date = valid_dates.min().date()
-    max_date = valid_dates.max().date()
-else:
-    min_date = datetime.today().date()
-    max_date = datetime.today().date()
-
-# Sidebar input form
-st.sidebar.header("Add New Property Investment")
-
-with st.sidebar.form("input_form"):
-    property_name = st.text_input("Property Name")
-    weekly_rent = st.number_input("Weekly Rent (£)", min_value=0.0, format="%.2f")
-    lease_start = st.date_input("Lease Start Date", value=datetime.today())
-    lease_period = st.number_input("Lease Period (Months)", min_value=1, step=1)
-    agent_fee_pct = st.number_input("Agent Fee (%)", min_value=0.0, max_value=100.0, format="%.2f")
-    other_costs_str = st.text_area("Other Costs During Period (comma-separated £ amounts)", "")
-    weekly_mortgage_interest = st.number_input("Weekly Mortgage Interest (£)", min_value=0.0, format="%.2f")
-    weekly_mortgage_principal = st.number_input("Weekly Mortgage Principal (£)", min_value=0.0, format="%.2f")
-    residual_loan_balance = st.number_input("Residual Loan Balance (£)", min_value=0.0, format="%.2f")
-    notes = st.text_area("Notes (optional)", "")
-
-    submitted = st.form_submit_button("Add / Update Investment")
-
-    if submitted and property_name:
-        # Parse other costs into list of floats, ignoring invalid entries
-        other_costs_list = []
-        if other_costs_str.strip():
-            try:
-                other_costs_list = [float(x.strip()) for x in other_costs_str.split(",") if x.strip()]
-            except:
-                st.error("Please enter valid numbers separated by commas for Other Costs.")
-                st.stop()
-
-        # Calculate totals
-        weeks_in_month = 4.345
-        total_weeks = weeks_in_month * lease_period
-        total_rent = weekly_rent * total_weeks
-        agent_cost = total_rent * (agent_fee_pct / 100)
-        total_other_costs = sum(other_costs_list)
-        total_mortgage_interest = weekly_mortgage_interest * total_weeks
-        total_mortgage_principal = weekly_mortgage_principal * total_weeks
-        total_mortgage_cost = total_mortgage_interest + total_mortgage_principal
-
-        # Net cash flow calculation
-        net_cash_flow = total_rent - agent_cost - total_other_costs - total_mortgage_cost
-
-        new_entry = {
-            "Property": property_name,
-            "Weekly Rent": weekly_rent,
-            "Lease Start Date": lease_start,
-            "Lease Period (Months)": lease_period,
-            "Agent Fee (%)": agent_fee_pct,
-            "Other Costs (comma-separated)": other_costs_str,
-            "Weekly Mortgage Interest": weekly_mortgage_interest,
-            "Weekly Mortgage Principal": weekly_mortgage_principal,
-            "Residual Loan Balance": residual_loan_balance,
-            "Notes": notes,
-            "Total Rent": total_rent,
-            "Agent Cost": agent_cost,
-            "Total Other Costs": total_other_costs,
-            "Total Mortgage Interest": total_mortgage_interest,
-            "Total Mortgage Principal": total_mortgage_principal,
-            "Total Mortgage Cost": total_mortgage_cost,
-            "Net Cash Flow": net_cash_flow
-        }
-
-        # Append to df and save
-        df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
-        df.to_csv(DATA_FILE, index=False)
-        st.success(f"Property '{property_name}' added successfully!")
-
-# Filters to view data
-st.sidebar.markdown("---")
-st.sidebar.header("Filter Investments")
-
-properties = df["Property"].unique().tolist()
-selected_properties = st.sidebar.multiselect("Select Properties", properties, default=properties)
-
-start_date_filter, end_date_filter = st.sidebar.date_input(
-    "Filter by Lease Start Date Range",
-    value=(min_date, max_date)
-)
-
-# Filter dataframe
-filtered_df = df[
-    (df["Property"].isin(selected_properties)) &
-    (df["Lease Start Date"].between(pd.to_datetime(start_date_filter), pd.to_datetime(end_date_filter)))
-]
-
-if filtered_df.empty:
-    st.warning("No investment data matches the filters.")
-else:
-    st.subheader("Investment Summary")
-    display_cols = [
-        "Property", "Weekly Rent", "Lease Start Date", "Lease Period (Months)",
-        "Agent Fee (%)", "Total Rent", "Agent Cost", "Total Other Costs",
-        "Weekly Mortgage Interest", "Weekly Mortgage Principal",
-        "Total Mortgage Interest", "Total Mortgage Principal", "Total Mortgage Cost",
-        "Residual Loan Balance", "Net Cash Flow", "Notes"
-    ]
-    st.dataframe(filtered_df[display_cols].sort_values("Lease Start Date", ascending=False))
-
-    st.subheader("Net Cash Flow by Property")
-    net_cash = filtered_df.groupby("Property")["Net Cash Flow"].sum()
-    st.bar_chart(net_cash)
-
-    st.subheader("Residual Loan Balances")
-    residuals = filtered_df.groupby("Property")["Residual Loan Balance"].last()
-    st.bar_chart(residuals)
+    st.warning("Please enter values for rent and lease period to calculate.")
