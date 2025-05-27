@@ -19,8 +19,8 @@ else:
         "Lease Period (Months)",
         "Agent Fee (%)",
         "Other Costs (comma-separated)",
-        "Mortgage Interest",
-        "Mortgage Principal",
+        "Weekly Mortgage Interest",
+        "Weekly Mortgage Principal",
         "Residual Loan Balance",
         "Notes"
     ])
@@ -45,8 +45,8 @@ with st.sidebar.form("input_form"):
     lease_period = st.number_input("Lease Period (Months)", min_value=1, step=1)
     agent_fee_pct = st.number_input("Agent Fee (%)", min_value=0.0, max_value=100.0, format="%.2f")
     other_costs_str = st.text_area("Other Costs During Period (comma-separated £ amounts)", "")
-    mortgage_interest = st.number_input("Mortgage Interest (£)", min_value=0.0, format="%.2f")
-    mortgage_principal = st.number_input("Mortgage Principal (£)", min_value=0.0, format="%.2f")
+    weekly_mortgage_interest = st.number_input("Weekly Mortgage Interest (£)", min_value=0.0, format="%.2f")
+    weekly_mortgage_principal = st.number_input("Weekly Mortgage Principal (£)", min_value=0.0, format="%.2f")
     residual_loan_balance = st.number_input("Residual Loan Balance (£)", min_value=0.0, format="%.2f")
     notes = st.text_area("Notes (optional)", "")
 
@@ -63,13 +63,17 @@ with st.sidebar.form("input_form"):
                 st.stop()
 
         # Calculate totals
-        total_rent = weekly_rent * 4.345 * lease_period  # Approx weeks per month * months
+        weeks_in_month = 4.345
+        total_weeks = weeks_in_month * lease_period
+        total_rent = weekly_rent * total_weeks
         agent_cost = total_rent * (agent_fee_pct / 100)
         total_other_costs = sum(other_costs_list)
-        total_mortgage = mortgage_interest + mortgage_principal
+        total_mortgage_interest = weekly_mortgage_interest * total_weeks
+        total_mortgage_principal = weekly_mortgage_principal * total_weeks
+        total_mortgage_cost = total_mortgage_interest + total_mortgage_principal
 
         # Net cash flow calculation
-        net_cash_flow = total_rent - agent_cost - total_other_costs - total_mortgage
+        net_cash_flow = total_rent - agent_cost - total_other_costs - total_mortgage_cost
 
         new_entry = {
             "Property": property_name,
@@ -78,14 +82,16 @@ with st.sidebar.form("input_form"):
             "Lease Period (Months)": lease_period,
             "Agent Fee (%)": agent_fee_pct,
             "Other Costs (comma-separated)": other_costs_str,
-            "Mortgage Interest": mortgage_interest,
-            "Mortgage Principal": mortgage_principal,
+            "Weekly Mortgage Interest": weekly_mortgage_interest,
+            "Weekly Mortgage Principal": weekly_mortgage_principal,
             "Residual Loan Balance": residual_loan_balance,
             "Notes": notes,
             "Total Rent": total_rent,
             "Agent Cost": agent_cost,
             "Total Other Costs": total_other_costs,
-            "Total Mortgage Cost": total_mortgage,
+            "Total Mortgage Interest": total_mortgage_interest,
+            "Total Mortgage Principal": total_mortgage_principal,
+            "Total Mortgage Cost": total_mortgage_cost,
             "Net Cash Flow": net_cash_flow
         }
 
@@ -119,7 +125,8 @@ else:
     display_cols = [
         "Property", "Weekly Rent", "Lease Start Date", "Lease Period (Months)",
         "Agent Fee (%)", "Total Rent", "Agent Cost", "Total Other Costs",
-        "Mortgage Interest", "Mortgage Principal", "Total Mortgage Cost",
+        "Weekly Mortgage Interest", "Weekly Mortgage Principal",
+        "Total Mortgage Interest", "Total Mortgage Principal", "Total Mortgage Cost",
         "Residual Loan Balance", "Net Cash Flow", "Notes"
     ]
     st.dataframe(filtered_df[display_cols].sort_values("Lease Start Date", ascending=False))
